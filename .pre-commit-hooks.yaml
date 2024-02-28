@@ -1,0 +1,7 @@
+-   id: add-jira-tag
+    name: add-jira-tag
+    description: "Adds Jira issue key as a tag in commit messages if a Jira key is found in the branch's name"
+    entry: add_jira_tag.sh
+    language: script
+    stages: [ prepare-commit-msg ]
+    minimum_pre_commit_version: "3.6.2"
