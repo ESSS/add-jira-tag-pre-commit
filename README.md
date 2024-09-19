@@ -9,7 +9,7 @@ Add the following to the `.pre-commit-config.yaml` file in you repo.
 
 ``` yaml
 -   repo: https://github.com/ESSS/add-jira-tag-pre-commit
-    rev: v0.1.0
+    rev: v0.1.1
     hooks:
         -   id: add-jira-tag
             name: add-jira-tag
