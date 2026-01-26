@@ -1,0 +1,23 @@
+[package]
+name = "add-jira-tag"
+version = "0.2.0"
+edition = "2021"
+authors = ["ESSS"]
+description = "Adds Jira issue key as a tag in commit messages"
+license = "MIT"
+repository = "https://github.com/ESSS/add-jira-tag-pre-commit"
+
+[[bin]]
+name = "add-jira-tag"
+path = "src/main.rs"
+
+[dependencies]
+regex = "1"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = true
+strip = true
+opt-level = "z"

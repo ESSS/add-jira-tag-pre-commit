@@ -23,10 +23,20 @@ Then, install `pre-commit` hooks (usually `pre-commit install`).
 ---
 ## Development
 
-Run tests with:
+### Prerequisites
+
+- Rust toolchain (install from https://rustup.rs/)
+
+### Run tests
 
 ```bash
-uv run --with pytest pytest
+cargo test
+```
+
+### Build release binary
+
+```bash
+cargo build --release
 ```
 
 ### Install hooks locally
@@ -34,11 +44,11 @@ uv run --with pytest pytest
 To use this hook during development of this repo, with `pre-commit`:
 
 ```bash
-uv run --with pre-commit pre-commit install -t prepare-commit-msg
+pre-commit install -t prepare-commit-msg
 ```
 
 or with `prek`:
 
 ```bash
-uv run --with prek prek install -t prepare-commit-msg
+prek install -t prepare-commit-msg
 ```
