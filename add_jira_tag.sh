@@ -1,17 +1,46 @@
 #!/usr/bin/env bash
 
+# The branch prefix that precedes the Jira tag. May be a regex (e.g.
+# "(task|feat|fix)-"). Overridable via `--prefix <regex>` (e.g. in pre-commit's
+# `args:`). The Jira capture groups that follow it are fixed.
+prefix="fb-"
+
+# Parse hook options. pre-commit prepends `args:` before git's own arguments,
+# so consume known options first, then read git's positional arguments.
+while [[ $# -gt 0 ]]
+do
+    case "$1" in
+        --prefix)
+            prefix=$2
+            shift 2
+            ;;
+        --prefix=*)
+            prefix=${1#--prefix=}
+            shift
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
 # Git will pass the commit msg as an argument to prepare-commit-msg hook.
 # See https://git-scm.com/docs/githooks#_prepare_commit_msg.
 commit_msg_filepath=$1
 
 branch_name=$(git branch --show-current)
 
-regex="fb-([A-Z]+-[0-9]+)(-.*)?"
+regex="${prefix}([A-Z]+-[0-9]+)(-.*)?"
 if [[ $branch_name =~ $regex ]]
 then
+    # The prefix may itself contain capture groups (bash uses POSIX ERE, which
+    # has no non-capturing groups, so e.g. "(task|feat|fix)-" needs one). That
+    # would shift BASH_REMATCH indices, so re-extract the Jira key from the
+    # matched text instead of trusting a fixed group index.
+    [[ ${BASH_REMATCH[0]} =~ ([A-Z]+-[0-9]+) ]]
     jira_issue=${BASH_REMATCH[1]}
 else
-    echo Branch is not in format 'fb-{JIRA_TAG}'. Skipping...
+    echo "Branch is not in format '${prefix}{JIRA_TAG}'. Skipping..."
     exit 0
 fi
 

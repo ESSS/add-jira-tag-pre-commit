@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 SCRIPT_PATH = Path(__file__).parent.parent / "add_jira_tag.sh"
 
@@ -39,14 +41,25 @@ def _get_git_bash() -> str:
     return "bash"  # Fall back to PATH.
 
 
-def _run_hook(tmp_path: Path, commit_msg: str, branch_name: str = "fb-PROJ-123-feature") -> tuple[str, str, str, int]:
+def _run_hook(
+    tmp_path: Path,
+    commit_msg: str,
+    branch_name: str = "fb-PROJ-123-feature",
+    args: list[str] | None = None,
+) -> tuple[str, str, str, int]:
     """
     Run the hook script with a mocked git branch command.
+
+    ``args`` are extra hook options (e.g. ``["--prefix", "feat-"]``) injected
+    before git's positional commit-message argument, mirroring pre-commit's
+    ``args:`` behaviour.
 
     Returns (stdout, stderr, result_msg, returncode).
     """
     msg_file = tmp_path / "COMMIT_EDITMSG"
     msg_file.write_text(commit_msg)
+
+    extra_args = " ".join(f'"{arg}"' for arg in (args or []))
 
     wrapper_script = f'''
 git() {{
@@ -58,7 +71,7 @@ git() {{
 }}
 export -f git
 
-source "{SCRIPT_PATH.as_posix()}"
+source "{SCRIPT_PATH.as_posix()}" {extra_args} "$@"
 '''
     wrapper_file = tmp_path / "wrapper.sh"
     wrapper_file.write_text(wrapper_script)
@@ -262,3 +275,77 @@ def test_old_format_different_tag_preserved(tmp_path: Path) -> None:
     assert result_msg.startswith("[OTHER-456] Add feature")
     assert "OTHER-456\n" not in result_msg.split("\n", 1)[1]  # Old tag removed from end.
     assert "Converting old format tag" in stdout
+
+
+def test_custom_prefix_adds_tag(tmp_path: Path) -> None:
+    """A custom --prefix matches a branch with that prefix and tags the title."""
+    stdout, stderr, result_msg, code = _run_hook(
+        tmp_path,
+        "Add feature\n",
+        branch_name="feat-PROJ-123-some-feature",
+        args=["--prefix", "feat-"],
+    )
+    assert code == 0, f"Exit code {code}, stderr: {stderr}"
+    assert result_msg == "[PROJ-123] Add feature\n"
+    assert "Adding tag" in stdout
+
+
+def test_custom_prefix_equals_form(tmp_path: Path) -> None:
+    """The --prefix=<value> form is also supported."""
+    stdout, stderr, result_msg, code = _run_hook(
+        tmp_path,
+        "Add feature\n",
+        branch_name="feat-PROJ-123-some-feature",
+        args=["--prefix=feat-"],
+    )
+    assert code == 0, f"Exit code {code}, stderr: {stderr}"
+    assert result_msg == "[PROJ-123] Add feature\n"
+
+
+def test_default_prefix_still_works_with_no_args(tmp_path: Path) -> None:
+    """With no args the default 'fb-' prefix keeps working (regression)."""
+    stdout, stderr, result_msg, code = _run_hook(tmp_path, "Add feature\n")
+    assert code == 0, f"Exit code {code}, stderr: {stderr}"
+    assert result_msg == "[PROJ-123] Add feature\n"
+
+
+def test_custom_prefix_skips_default_fb_branch(tmp_path: Path) -> None:
+    """When a custom prefix is set, a default 'fb-' branch no longer matches."""
+    input_msg = "Add feature\n"
+    stdout, stderr, result_msg, code = _run_hook(
+        tmp_path,
+        input_msg,
+        branch_name="fb-PROJ-123-feature",
+        args=["--prefix", "feat-"],
+    )
+    assert code == 0, f"Exit code {code}, stderr: {stderr}"
+    assert result_msg == input_msg  # Unchanged.
+    assert "Skipping" in stdout
+
+
+@pytest.mark.parametrize("branch_prefix", ["task", "feat", "fix"])
+def test_alternation_prefix_triggers_for_each(tmp_path: Path, branch_prefix: str) -> None:
+    """An alternation prefix '(task|feat|fix)-' matches any of the three."""
+    stdout, stderr, result_msg, code = _run_hook(
+        tmp_path,
+        "Add feature\n",
+        branch_name=f"{branch_prefix}-PROJ-1-some-feature",
+        args=["--prefix", "(task|feat|fix)-"],
+    )
+    assert code == 0, f"Exit code {code}, stderr: {stderr}"
+    assert result_msg == "[PROJ-1] Add feature\n"
+    assert "Adding tag" in stdout
+
+
+def test_alternation_prefix_skips_non_member(tmp_path: Path) -> None:
+    """A branch prefix outside the alternation set is skipped."""
+    input_msg = "Add feature\n"
+    stdout, stderr, result_msg, code = _run_hook(
+        tmp_path,
+        input_msg,
+        branch_name="chore-PROJ-1-some-feature",
+        args=["--prefix", "(task|feat|fix)-"],
+    )
+    assert code == 0, f"Exit code {code}, stderr: {stderr}"
+    assert result_msg == input_msg  # Unchanged.
+    assert "Skipping" in stdout
